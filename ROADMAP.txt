@@ -1,0 +1,137 @@
+# A Tribunal-Grade AI Paralegal Assistant: An Architectural Blueprint for an MVP
+
+This document provides a comprehensive, research-backed architectural blueprint for the development of a Minimum Viable Product (MVP) for a **tribunal-grade AI Paralegal Assistant**. The design focuses on leveraging low-to-no-code methods and modern AI-native technologies to create a system that is **deterministic**, **auditable**, and capable of operating in an **offline environment**. The architecture is meticulously scaffolded to be machine-readable and ready for immediate development with AI coding assistants like GitHub Copilot or Cursor. Each component—from the orchestration framework to the knowledge graph engine—has been selected based on its proven suitability for high-stakes legal workflows where traceability and reliability are paramount.
+
+## Tool & Stack Selection: A Foundation for Determinism and Auditability
+
+The selection of foundational tools and libraries is the most critical decision in building a tribunal-grade AI system. For this MVP, the primary constraints are **determinism**, **auditability**, **offline capability**, and avoiding external web calls by default. These requirements fundamentally shape the choice of each technology layer, prioritizing frameworks that offer explicit control over execution flow and state management over those designed for rapid, abstracted prototyping.
+
+### Orchestration Framework: LangGraph over CrewAI
+
+The core of the system's workflow control will be managed by **LangGraph**. While CrewAI offers advantages in rapid persona setup, it is less suitable for tribunal-grade use due to its abstraction and lack of robust state persistence. LangGraph provides:
+- **Explicit graph-based execution** (nodes and edges)
+- **Deterministic replay** via checkpointing
+- **Human-in-the-Loop (HITL)** support with state preservation
+- **Full auditability** of every reasoning step
+
+This makes LangGraph the superior choice for legal workflows requiring verifiable integrity.
+
+### Knowledge Graph Engine: GraphRAG-SDK with FalkorDB
+
+The optimal knowledge graph solution is the **GraphRAG-SDK** powered by **FalkorDB**. This stack offers:
+- Automated ontology creation from unstructured legal documents (PDFs, CSVs)
+- High-performance, low-latency graph storage
+- Support for **multi-hop reasoning** (e.g., tracing jurisdictional chains)
+- Native compatibility with **offline LLMs** (e.g., via Ollama)
+
+FalkorDB’s C-based engine ensures efficiency, while the SDK abstracts complex RAG pipeline logic into a deterministic, scriptable workflow.
+
+### Vector Store: ChromaDB (Lightweight & Local)
+
+For semantic retrieval augmentation, **ChromaDB** is selected as a lightweight, open-source, embeddable vector store. It operates entirely in-memory or on-disk, requires no external services, and integrates cleanly with LangChain/LangGraph. While future versions may adopt hybrid graph+vector search, ChromaDB suffices for MVP scope.
+
+### AI Coding Assistants
+
+All major AI coding assistants—**GitHub Copilot**, **Blackbox**, **Cursor**, and **Codeium**—are compatible with this architecture. The project’s machine-readable prompts (in `.ai-context/`) ensure consistent, spec-compliant code generation across tools.
+
+| Component               | Choice              | Justification |
+|------------------------|---------------------|--------------|
+| Orchestration          | LangGraph           | Deterministic, auditable, replayable workflows |
+| Knowledge Graph        | GraphRAG-SDK + FalkorDB | Automated legal KG construction, offline-capable |
+| Vector Store           | ChromaDB            | Lightweight, local, open-source |
+| AI Assistants          | Copilot/Cursor/etc. | All support context-aware generation from `.ai-context/` |
+
+## Architecture Blueprint: Designing for Verifiability and Scalability
+
+The system is structured as a modular, layered architecture to enforce separation of concerns and enable independent validation.
+
+### File Structure
+/ai_paralegal_mvp
+├── .ai-context/ # Machine-readable AI instructions
+│ ├── project.schema.json # Root JSON Schema
+│ ├── persona_templates.yaml # Agent persona rules
+│ └── kg_rules.md # Graph derivation logic
+├── .github/workflows/ # CI validation (conformance, proof tokens)
+├── .vscode/ # AI-optimized editor settings
+├── ai_paralegal_ssot/ # System of Record and Truth (SSOT)
+│ ├── personas.json # Legal Analyst, Red Team, etc.
+│ ├── graph.schema.json # Node/relationship enums
+│ └── validate_ssot.py # Schema validator
+├── api/
+│ └── service/
+│ └── main.py # FastAPI with RBAC & PII masking
+├── kg/
+│ ├── refine_kg.py # Input: messages.csv → Output: nodes/edges CSVs
+│ └── validate_proof_tokens.py # Enforce proof token format
+├── scripts/
+│ └── generate_conformance_report.py
+├── ui/
+│ └── pages/
+│ └── orchestrator.js # Task + persona UI
+├── docs/runbooks/ # Setup, audit, offline operation guides
+├── .gitignore
+├── .pre-commit-config.yaml
+├── ARCHITECTURE.md # ← This file
+├── README.md
+├── ROADMAP.md
+└── requirements.txt
+
+---
+
+## 4. Core Contracts
+
+### `kg/refine_kg.py`
+- **Input**: `messages.csv` with columns: `doc_id`, `page`, `text`
+- **Output**:  
+  - `nodes_final.csv`: `id,type,name`  
+  - `edges_final.csv`: `source,target,relationship,proof`
+- **Guardrail**: Every edge includes a `proof` token in format:  
+  `doc:{doc_id}|page:{page}|sha256={sha256(text_snippet)}`
+
+### `api/service/main.py`
+- **Endpoint**: `POST /orchestrate/run`
+  - **Request**: `{ "task": "Summarize misconduct allegations", "persona": "LegalAnalyst" }`
+  - **Auth**: Validates `role` from `roles.json`
+  - **PII**: Masks sensitive data unless `?pii_mask=false` (auditor-only)
+  - **Response**: `{ "job_id": "job_abc123", "status_url": "/jobs/job_abc123" }`
+
+### `ai_paralegal_ssot/personas.json`
+```json
+[
+  {
+    "name": "LegalAnalyst",
+    "role": "Analyze legal documents to identify key facts...",
+    "goal": "Provide a comprehensive summary...",
+    "backstory": "You are an experienced litigation attorney..."
+  }
+]
+5. Validation & Guardrails
+Non-Negotiable Checks
+Proof Tokens: Every edge must have a valid proof field (regex-validated).
+PII Masking: Applied to all UI/API outputs by default.
+Deterministic Sorting: CSV outputs sorted by id; SHA256SUMS.txt generated.
+SSOT Conformance: All data validated against graph.schema.json.
+Validation Scripts
+validate_ssot.py: Fails if nodes/edges violate schema.
+validate_proof_tokens.py: Fails if any edge lacks proof token.
+generate_conformance_report.py: Outputs conformance_report.md with:
+markdown
+
+- Invalid nodes: 0
+- Invalid edges: 0
+- Proof tokens: 100% compliant
+
+CI Enforcement (GitHub Actions)
+Runs on every push/pull_request
+Blocks merge if conformance report shows errors
+Requires linear history and PR review for main
+6. Roadmap Alignment
+v0.1
+Core KG pipeline, LangGraph orchestration, FastAPI with RBAC
+v0.2
+KG Studio (Cytoscape), UI filters, hybrid search
+v0.3
+Job queue, Docker deployment, full audit trail
+
+7. Conclusion
+This architecture delivers a verifiable, secure, and legally defensible AI assistant that meets the stringent requirements of tribunal environments. By embedding guardrails at every layer—from data ingestion to API response—and leveraging machine-readable specifications for AI-assisted development, the MVP establishes a foundation for scalable, trustworthy legal AI.

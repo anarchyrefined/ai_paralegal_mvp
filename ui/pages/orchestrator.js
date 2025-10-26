@@ -1,8 +1,63 @@
 // Next.js page for task submission
+import { useState, useEffect } from 'react';
+
 export default function Orchestrator() {
-  // [AI-PROMPT] Build a form with:
-  // - Textarea for task description
-  // - Dropdown for persona selection (from /api/personas)
-  // - Submit button that POSTs to /api/orchestrate/run
-  return <div>Tribunal AI Orchestrator UI (AI: scaffold form)</div>;
+  const [task, setTask] = useState('');
+  const [persona, setPersona] = useState('');
+  const [personas, setPersonas] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    // Fetch personas from API (placeholder)
+    fetch('/api/personas')
+      .then(res => res.json())
+      .then(data => setPersonas(data))
+      .catch(err => console.error(err));
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch('/api/orchestrate/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task, persona })
+      });
+      const data = await response.json();
+      setResult(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Tribunal AI Orchestrator</h1>
+      <form onSubmit={handleSubmit}>
+        <textarea
+          value={task}
+          onChange={(e) => setTask(e.target.value)}
+          placeholder="Enter task description"
+          required
+        />
+        <select value={persona} onChange={(e) => setPersona(e.target.value)} required>
+          <option value="">Select Persona</option>
+          {personas.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+        </select>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Submitting...' : 'Submit'}
+        </button>
+      </form>
+      {result && (
+        <div>
+          <p>Job ID: {result.job_id}</p>
+          <p>Status URL: {result.status_url}</p>
+        </div>
+      )}
+    </div>
+  );
 }

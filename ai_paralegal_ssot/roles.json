@@ -1,0 +1,14 @@
+[
+  {
+    "role": "user",
+    "permissions": ["read"]
+  },
+  {
+    "role": "auditor",
+    "permissions": ["read", "write", "pii_unmask"]
+  },
+  {
+    "role": "admin",
+    "permissions": ["read", "write", "pii_unmask", "admin"]
+  }
+]
