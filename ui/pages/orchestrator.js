@@ -1,34 +1,42 @@
 // Next.js page for task submission
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+
+console.log("Orchestrator page loaded");
 
 export default function Orchestrator() {
-  const [task, setTask] = useState('');
-  const [persona, setPersona] = useState('');
+  const [task, setTask] = useState("");
+  const [persona, setPersona] = useState("");
   const [personas, setPersonas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
+    console.log("Fetching personas from API");
     // Fetch personas from API (placeholder)
-    fetch('/api/personas')
-      .then(res => res.json())
-      .then(data => setPersonas(data))
-      .catch(err => console.error(err));
+    fetch("/api/personas")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Fetched personas:", data);
+        setPersonas(data);
+      })
+      .catch((err) => console.error("Error fetching personas:", err));
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("Submitting task:", task, "with persona:", persona);
     setLoading(true);
     try {
-      const response = await fetch('/api/orchestrate/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, persona })
+      const response = await fetch("/api/orchestrate/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task, persona }),
       });
       const data = await response.json();
+      console.log("Received response:", data);
       setResult(data);
     } catch (error) {
-      console.error(error);
+      console.error("Error submitting task:", error);
     } finally {
       setLoading(false);
     }
@@ -44,12 +52,20 @@ export default function Orchestrator() {
           placeholder="Enter task description"
           required
         />
-        <select value={persona} onChange={(e) => setPersona(e.target.value)} required>
+        <select
+          value={persona}
+          onChange={(e) => setPersona(e.target.value)}
+          required
+        >
           <option value="">Select Persona</option>
-          {personas.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+          {personas.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name}
+            </option>
+          ))}
         </select>
         <button type="submit" disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit'}
+          {loading ? "Submitting..." : "Submit"}
         </button>
       </form>
       {result && (

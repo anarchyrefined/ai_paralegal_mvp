@@ -10,10 +10,15 @@ from pydantic import BaseModel
 import json
 import uuid
 import re
+import logging
 from langgraph.graph import StateGraph, END  # Actual LangGraph
 from langgraph.checkpoint.memory import MemorySaver
 from .personas import app as personas_app
 # from graphrag_sdk import GraphRAG  # For KG queries - commented out for testing
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.mount("/api", personas_app)  # Mount personas endpoint
@@ -83,10 +88,12 @@ checkpointer = MemorySaver()
 graph = workflow.compile(checkpointer=checkpointer)
 
 def run_langgraph_workflow(task: str, persona: str):
+    logger.info(f"Starting LangGraph workflow for task: {task[:50]}... with persona: {persona}")
     # Run with deterministic seed (implicit via checkpointer)
     config = {"configurable": {"thread_id": "test_thread"}}  # For testing
     result = graph.invoke({"task": task, "persona": persona}, config=config)
     job_id = str(uuid.uuid4())
+    logger.info(f"Workflow completed for job_id: {job_id}")
     return {"job_id": job_id, "status": "completed", "result": result["response"]}
 
 def mask_pii(text: str):
@@ -98,15 +105,18 @@ def mask_pii(text: str):
 
 @app.post("/orchestrate/run")
 async def run_orchestration(task_request: TaskRequest, pii_mask: bool = Query(True)):
+    logger.info(f"Received orchestration request for persona: {task_request.persona}")
     # Validate persona
     persona_names = [p["name"] for p in personas]
     if task_request.persona not in persona_names:
+        logger.warning(f"Invalid persona requested: {task_request.persona}")
         raise HTTPException(status_code=400, detail="Invalid persona")
 
     # RBAC check (mock: assume auditor role for tests; in real, from JWT)
     user_role = "auditor"  # TODO: Extract from auth
     role_perms = next((r["permissions"] for r in roles if r["role"] == user_role), [])
     if "write" not in role_perms:
+        logger.warning(f"Insufficient permissions for role: {user_role}")
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     # Start LangGraph workflow
@@ -115,15 +125,19 @@ async def run_orchestration(task_request: TaskRequest, pii_mask: bool = Query(Tr
     # PII masking
     if pii_mask and "pii_unmask" not in role_perms:
         result["result"] = mask_pii(result["result"])
+        logger.info("PII masking applied to result")
 
     status_url = f"/jobs/{result['job_id']}"
+    logger.info(f"Orchestration completed, job_id: {result['job_id']}")
 
     return {"job_id": result["job_id"], "status_url": status_url}
 
 @app.get("/jobs/{job_id}")
 async def get_job_status(job_id: str, pii_mask: bool = Query(True)):
+    logger.info(f"Retrieving status for job_id: {job_id}")
     # Mock: in real, retrieve from DB
     result = "Completed analysis with proof tokens: doc:123|page:1|sha256=abc123..."
     if pii_mask:
         result = mask_pii(result)
+        logger.info("PII masking applied to job result")
     return {"job_id": job_id, "status": "completed", "result": result}

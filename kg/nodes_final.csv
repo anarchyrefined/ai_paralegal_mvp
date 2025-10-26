@@ -2,6 +2,4 @@ id,type,name
 contract_contract_002,Contract,Contract contract_002
 doc_contract_001_p2,Document,Document contract_001 Page 2
 party a_contract_001,Party,Party A
-party a_contract_001,Party,Party A
-party b_contract_001,Party,Party B
 party b_contract_001,Party,Party B
