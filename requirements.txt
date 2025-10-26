@@ -9,3 +9,5 @@ pdf2image
 black
 isort
 pre-commit
+pytest
+pytest-asyncio
