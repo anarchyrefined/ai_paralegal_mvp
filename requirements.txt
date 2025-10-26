@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+langgraph
+graphrag-sdk[all]
+jsonschema
+pandas
+pytesseract
+pdf2image
+black
+isort
+pre-commit

@@ -1,0 +1,27 @@
+name: Tribunal Validation
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run SSOT Validation
+        run: python ai_paralegal_ssot/validate_ssot.py
+      - name: Check Proof Tokens
+        run: python kg/validate_proof_tokens.py
+      - name: Generate Conformance Report
+        run: python scripts/generate_conformance_report.py
+      - name: Fail on Invalid Edges/Nodes
+        run: |
+          if grep -q "0 invalid" conformance_report.md; then
+            echo "✅ Validation passed"
+          else
+            echo "❌ Validation failed"
+            exit 1
+          fi

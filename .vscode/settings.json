@@ -1,0 +1,14 @@
+{
+  "github.copilot.enable": { "python": true, "javascript": true },
+  "blackbox.ai.context": {
+    "include": [".ai-context/**", "ai_paralegal_ssot/**", "docs/**"]
+  },
+  "python.formatting.provider": "black",
+  "editor.formatOnSave": true,
+  "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true,
+  "telemetry.telemetryLevel": "off",
+  "github.copilot.telemetry.enabled": false
+}

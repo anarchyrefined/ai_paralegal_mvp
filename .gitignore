@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+/evidence/
+/raw_docs/
+*.pdf
+*.docx
+/dist/
+/build/
+*.log
+!.ai-context/
+!SHA256SUMS.txt

@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "github.copilot",
+    "blackboxai.blackbox",
+    "ms-python.python",
+    "ms-vscode.vscode-typescript-next",
+    "ms-azuretools.vscode-docker"
+  ]
+}

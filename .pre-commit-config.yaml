@@ -1,0 +1,24 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3.11
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+  - repo: local
+    hooks:
+      - id: validate-ssot
+        name: Validate SSOT
+        entry: python ai_paralegal_ssot/validate_ssot.py
+        language: system
+        files: \.(csv|json)$
+        pass_filenames: false
+      - id: check-proof-tokens
+        name: Check Proof Tokens
+        entry: python kg/validate_proof_tokens.py
+        language: system
+        files: edges_final\.csv$
+        pass_filenames: false
