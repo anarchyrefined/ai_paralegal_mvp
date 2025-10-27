@@ -1,50 +1,20 @@
 // React component for KG filters with advanced psychological/investigative options
 import { useState } from "react";
 
-export default function FilterPanel({ filter, setFilter, nodes, edges }) {
+export default function FilterPanel({ filter, setFilter, onApply }) {
   const applyFilters = () => {
-    // Apply filters to nodes and edges
-    let filteredNodes = nodes;
-    let filteredEdges = edges;
-
-    if (filter.nodeType) {
-      filteredNodes = filteredNodes.filter(
-        (node) => node.type === filter.nodeType
-      );
-    }
-
-    if (filter.relationship) {
-      filteredEdges = filteredEdges.filter(
-        (edge) => edge.relationship === filter.relationship
-      );
-    }
-
-    if (filter.motive) {
-      filteredNodes = filteredNodes.filter(
-        (node) =>
-          node.type === "Motive" &&
-          node.name.toLowerCase().includes(filter.motive.toLowerCase())
-      );
-    }
-
-    if (filter.context) {
-      filteredNodes = filteredNodes.filter(
-        (node) =>
-          node.type === "Context" &&
-          node.name.toLowerCase().includes(filter.context.toLowerCase())
-      );
-    }
-
-    // Update parent state with filtered data
-    // Note: In a full implementation, this would trigger a re-render of the Cytoscape graph
-    console.log("Applied filters:", {
-      filteredNodes: filteredNodes.length,
-      filteredEdges: filteredEdges.length,
-    });
+    onApply(filter);
   };
 
   const clearFilters = () => {
-    setFilter({ nodeType: "", relationship: "", motive: "", context: "" });
+    const emptyFilter = {
+      nodeType: "",
+      relationship: "",
+      motive: "",
+      context: "",
+    };
+    setFilter(emptyFilter);
+    onApply(emptyFilter);
   };
 
   return (
