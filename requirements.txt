@@ -9,3 +9,14 @@ pdf2image
 black
 isort
 pre-commit
+pytest
+pytest-asyncio
+nltk
+scikit-learn
+chromadb
+sqlite3
+pyjwt
+celery[redis]
+redis
+cytoscape
+cytoscape-cose-bilkent

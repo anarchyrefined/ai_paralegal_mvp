@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Graph Schema",
-  "description": "Defines the allowed node types and relationship types for the knowledge graph.",
+  "description": "Defines the allowed node types and relationship types for the knowledge graph, extended for psychological and investigative analysis.",
   "type": "object",
   "properties": {
     "node_types": {
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["Document", "Party", "Contract", "Statute", "Event", "Location"]
+        "enum": ["Document", "Party", "Contract", "Statute", "Event", "Location", "Motive", "Context", "EvidenceCategory", "PsychologicalProfile", "CommunicationStyle", "PredictiveIndicator"]
       }
     },
     "relationship_types": {
@@ -20,10 +20,43 @@
           "CONTRACTED_PARTY",
           "REFERRED_TO_STATUTE",
           "OCCURRED_AT_LOCATION",
-          "ALLEGED_MISCONDUCT"
+          "ALLEGED_MISCONDUCT",
+          "INFLUENCES",
+          "PREDICTS",
+          "COMMUNICATES_VIA",
+          "EVIDENCE_OF",
+          "PSYCHOLOGICAL_LINK",
+          "STRATEGIC_CONNECTION"
         ]
+      }
+    },
+    "proof_token_metadata": {
+      "type": "object",
+      "properties": {
+        "hash_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["sha256", "blake3"]
+          }
+        },
+        "reasoning_metadata": {
+          "type": "object",
+          "properties": {
+            "blooms_level": {
+              "type": "string",
+              "enum": ["remember", "understand", "apply", "analyze", "evaluate", "create"]
+            },
+            "nlp_patterns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     }
   },
-  "required": ["node_types", "relationship_types"]
+  "required": ["node_types", "relationship_types", "proof_token_metadata"]
 }

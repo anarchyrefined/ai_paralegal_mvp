@@ -21,12 +21,15 @@ def main():
     # Validate edges
     try:
         edges_df = pd.read_csv("kg/edges_final.csv")
-        invalid_edges = edges_df[~edges_df["relationship"].isin(schema["properties"]["relationship_types"]["items"]["enum"])]
-        if not invalid_edges.empty:
-            print(f"❌ {len(invalid_edges)} invalid edges")
-            sys.exit(1)
+        if not edges_df.empty:
+            invalid_edges = edges_df[~edges_df["relationship"].isin(schema["properties"]["relationship_types"]["items"]["enum"])]
+            if not invalid_edges.empty:
+                print(f"❌ {len(invalid_edges)} invalid edges")
+                sys.exit(1)
     except FileNotFoundError:
         print("⚠️  edges_final.csv not found. Skipping edge validation.")
+    except pd.errors.EmptyDataError:
+        print("⚠️  edges_final.csv is empty. Skipping edge validation.")
 
     print("✅ SSOT validation passed")
 
