@@ -1,18 +1,44 @@
 import sqlite3
 import json
 import uuid
+import logging
 from datetime import datetime
-from celery import Celery
-from .main import run_langgraph_workflow  # Import the workflow function
+
+logger = logging.getLogger(__name__)
+
+try:
+    from celery import Celery
+    CELERY_IMPORT_ERROR = None
+except Exception as exc:  # pragma: no cover - defensive fallback
+    Celery = None  # type: ignore
+    CELERY_IMPORT_ERROR = exc
+    logger.warning(f"Celery import failed: {exc}. Running synchronously.")
 
 # Initialize Celery (optional, can be disabled for simple setups)
-try:
-    celery_app = Celery('ai_paralegal', broker='redis://localhost:6379/0')
-    CELERY_ENABLED = True
-except Exception as e:
-    logger.warning(f"Celery not available: {e}. Running synchronously.")
+if Celery:
+    try:
+        celery_app = Celery('ai_paralegal', broker='redis://localhost:6379/0')
+        CELERY_ENABLED = True
+    except Exception as e:
+        logger.warning(f"Celery not available: {e}. Running synchronously.")
+        CELERY_ENABLED = False
+        celery_app = None
+else:
     CELERY_ENABLED = False
     celery_app = None
+
+
+def _celery_task(func):
+    if celery_app:
+        return celery_app.task(func)
+    return func
+
+
+def _invoke_workflow(task: str, persona: str):
+    """Import workflow lazily to avoid circular dependency with main.py."""
+    from .main import run_langgraph_workflow
+
+    return run_langgraph_workflow(task, persona)
 
 # Database setup
 def init_db():
@@ -66,11 +92,11 @@ def update_job_status(job_id: str, status: str, result: str = None):
     conn.commit()
     conn.close()
 
-@celery_app.task
+@_celery_task
 def process_job(job_id: str, task: str, persona: str):
     try:
         update_job_status(job_id, 'running')
-        result = run_langgraph_workflow(task, persona)
+        result = _invoke_workflow(task, persona)
         update_job_status(job_id, 'completed', json.dumps(result))
     except Exception as e:
         update_job_status(job_id, 'failed', str(e))
@@ -79,7 +105,7 @@ def process_job_sync(job_id: str, task: str, persona: str):
     """Synchronous job processing for setups without Celery."""
     try:
         update_job_status(job_id, 'running')
-        result = run_langgraph_workflow(task, persona)
+        result = _invoke_workflow(task, persona)
         update_job_status(job_id, 'completed', json.dumps(result))
     except Exception as e:
         update_job_status(job_id, 'failed', str(e))

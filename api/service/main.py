@@ -11,10 +11,15 @@ import json
 import uuid
 import re
 import logging
-from langgraph.graph import StateGraph, END  # Actual LangGraph
-from langgraph.checkpoint.sqlite import SqliteSaver
+try:
+    from langgraph.graph import StateGraph, END  # Actual LangGraph
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    LANGGRAPH_AVAILABLE = True
+except ModuleNotFoundError:
+    StateGraph = END = SqliteSaver = None  # type: ignore
+    LANGGRAPH_AVAILABLE = False
 from .personas import app as personas_app
-from .jobs import create_job, get_job_status
+from .jobs import create_job, get_job_status as fetch_job_status
 from .auth import authenticate_user
 from kg.kg_queries import hybrid_search
 from fastapi import Header
@@ -66,26 +71,34 @@ def generate_response(state):
     state["response"] = response
     return state
 
-workflow = StateGraph(dict)
-workflow.add_node("query_kg", query_kg)
-workflow.add_node("generate", generate_response)
+if LANGGRAPH_AVAILABLE:
+    workflow = StateGraph(dict)
+    workflow.add_node("query_kg", query_kg)
+    workflow.add_node("generate", generate_response)
 
-# Conditional routing from entry
-workflow.add_conditional_edges("__start__", route_task, {
-    "analyze": "query_kg",
-    "comply": "query_kg",
-    "challenge": "query_kg",
-    "default": "query_kg"
-})
-workflow.add_edge("query_kg", "generate")
-workflow.add_edge("generate", END)
+    # Conditional routing from entry
+    workflow.add_conditional_edges("__start__", route_task, {
+        "analyze": "query_kg",
+        "comply": "query_kg",
+        "challenge": "query_kg",
+        "default": "query_kg"
+    })
+    workflow.add_edge("query_kg", "generate")
+    workflow.add_edge("generate", END)
 
-# Persistent checkpoint with SQLite
-checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
+    # Persistent checkpoint with SQLite
+    checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
 
-graph = workflow.compile(checkpointer=checkpointer)
+    graph = workflow.compile(checkpointer=checkpointer)
+else:
+    graph = None
+
 
 def run_langgraph_workflow(task: str, persona: str):
+    if not LANGGRAPH_AVAILABLE or graph is None:
+        logger.warning("LangGraph unavailable; returning stubbed workflow response")
+        return f"[stub response] Persona {persona}: {task}"
+
     logger.info(f"Starting LangGraph workflow for task: {task[:50]}... with persona: {persona}")
     # Run with deterministic seed (implicit via checkpointer)
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}  # Unique thread per run
@@ -143,12 +156,12 @@ async def get_job_status(job_id: str, pii_mask: bool = Query(True), authorizatio
 
     role_perms = next((r["permissions"] for r in roles if r["role"] == user_role), [])
 
-    job = get_job_status(job_id)
+    job = fetch_job_status(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     result = job["result"]
-    if pii_mask and "pii_unmask" not in role_perms:
+    if result is not None and pii_mask and "pii_unmask" not in role_perms:
         result = mask_pii(result)
         logger.info("PII masking applied to job result")
 
