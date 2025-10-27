@@ -4,10 +4,12 @@ import json
 import os
 import re
 import logging
-# from graphrag_sdk import GraphRAG  # Placeholder - not available
-# from graphrag_sdk.source import LocalSource
+from graphrag_sdk import GraphRAG
+from graphrag_sdk.source import LocalSource
+import chromadb
 import pytesseract
 from pdf2image import convert_from_path
+from advanced_extraction import AdvancedExtractor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -52,16 +54,23 @@ def refine_kg(input_path="messages.csv"):
     logger.info("Preprocessing text for PII masking and error correction")
     df['text'] = df['text'].apply(preprocess_text)
 
-    # Initialize GraphRAG with FalkorDB (placeholder)
-    # grag = GraphRAG(
-    #     llm="ollama/llama3.2",  # Offline LLM
-    #     source=LocalSource(type="csv", file_path=input_path),
-    #     vector_store="chromadb",
-    #     graph_store="falkordb"
-    # )
+    # Initialize ChromaDB for vector store
+    chroma_client = chromadb.PersistentClient(path="./chroma_db")
+    vector_store = chroma_client.get_or_create_collection(name="legal_docs")
 
-    # Build knowledge graph (placeholder)
-    # grag.build()
+    # Initialize GraphRAG with FalkorDB
+    grag = GraphRAG(
+        llm="ollama/llama3.2",  # Offline LLM
+        source=LocalSource(type="csv", file_path=input_path),
+        vector_store=vector_store,
+        graph_store="falkordb"
+    )
+
+    # Build knowledge graph
+    grag.build()
+
+    # Initialize advanced extractor for psychological/investigative analysis
+    advanced_extractor = AdvancedExtractor()
 
     # Extract nodes and edges with proof tokens (extensible hash)
     logger.info("Extracting nodes and edges from text")
@@ -77,16 +86,28 @@ def refine_kg(input_path="messages.csv"):
         hash_value = hashlib.sha256(text.encode()).hexdigest()
         proof = f"doc:{doc_id}|page:{page}|{hash_type}={hash_value}"
 
-        # Use GraphRAG to extract entities/relationships (placeholder)
-        # entities = grag.extract_entities(text)  # Assume method exists
-        # for entity in entities:
-        #     nodes.append({"id": entity['id'], "type": entity['type'], "name": entity['name']})
+        # Advanced psychological and investigative analysis
+        psych_analysis = advanced_extractor.analyze_psychology(text)
+        evidence_cats = advanced_extractor.categorize_evidence(text)
+        strategic_reasoning = advanced_extractor.strategic_reasoning(text)
 
-        # relationships = grag.extract_relationships(text)
-        # for rel in relationships:
-        #     edges.append({"source": rel['source'], "target": rel['target'], "relationship": rel['type'], "proof": proof})
+        # Use GraphRAG to extract entities/relationships
+        entities = grag.extract_entities(text)
+        for entity in entities:
+            node_id = f"{entity['type'].lower()}_{entity['id']}_{doc_id}"
+            if not any(n['id'] == node_id for n in nodes):
+                nodes.append({"id": node_id, "type": entity['type'], "name": entity['name']})
+                logger.debug(f"Added node: {node_id}")
 
-        # Basic entity extraction (regex-based placeholder)
+        relationships = grag.extract_relationships(text)
+        for rel in relationships:
+            source = f"{rel['source_type'].lower()}_{rel['source']}_{doc_id}"
+            target = f"{rel['target_type'].lower()}_{rel['target']}_{doc_id}"
+            if not any(e['source'] == source and e['target'] == target for e in edges):
+                edges.append({"source": source, "target": target, "relationship": rel['type'], "proof": proof})
+                logger.debug(f"Added edge: {source} -> {target}")
+
+        # Enhanced entity extraction with psychological insights
         parties = re.findall(r'Party [A-Z]', text)
         for party in parties:
             node_id = f"{party.lower()}_{doc_id}"
@@ -101,7 +122,28 @@ def refine_kg(input_path="messages.csv"):
                 nodes.append({"id": node_id, "type": "Contract", "name": f"Contract {doc_id}"})
                 logger.debug(f"Added node: {node_id}")
 
-        # Basic relationships
+        # Add psychological and investigative nodes
+        if psych_analysis['motive_indicators']:
+            for motive, count in psych_analysis['motive_indicators'].items():
+                if count > 0:
+                    node_id = f"motive_{motive}_{doc_id}_p{page}"
+                    if not any(n['id'] == node_id for n in nodes):
+                        nodes.append({"id": node_id, "type": "Motive", "name": motive.replace('_', ' ').title()})
+                        logger.debug(f"Added motive node: {node_id}")
+
+        if psych_analysis['communication_style']['dominant'] != 'assertive':
+            node_id = f"comm_style_{psych_analysis['communication_style']['dominant']}_{doc_id}_p{page}"
+            if not any(n['id'] == node_id for n in nodes):
+                nodes.append({"id": node_id, "type": "CommunicationStyle", "name": psych_analysis['communication_style']['dominant'].title()})
+                logger.debug(f"Added communication style node: {node_id}")
+
+        if strategic_reasoning['risk_assessment']['level'] != 'low':
+            node_id = f"context_risk_{strategic_reasoning['risk_assessment']['level']}_{doc_id}_p{page}"
+            if not any(n['id'] == node_id for n in nodes):
+                nodes.append({"id": node_id, "type": "Context", "name": f"Risk Level: {strategic_reasoning['risk_assessment']['level'].title()}"})
+                logger.debug(f"Added context node: {node_id}")
+
+        # Enhanced relationships with strategic connections
         if parties and contracts:
             for party in parties:
                 source = f"{party.lower()}_{doc_id}"
@@ -109,6 +151,32 @@ def refine_kg(input_path="messages.csv"):
                 if not any(e['source'] == source and e['target'] == target for e in edges):  # Avoid duplicates
                     edges.append({"source": source, "target": target, "relationship": "CONTRACTED_PARTY", "proof": proof})
                     logger.debug(f"Added edge: {source} -> {target}")
+
+        # Add psychological and strategic relationships
+        for motive, count in psych_analysis['motive_indicators'].items():
+            if count > 0:
+                for party in parties:
+                    source = f"{party.lower()}_{doc_id}"
+                    target = f"motive_{motive}_{doc_id}_p{page}"
+                    if not any(e['source'] == source and e['target'] == target for e in edges):
+                        edges.append({"source": source, "target": target, "relationship": "INFLUENCES", "proof": proof})
+                        logger.debug(f"Added psychological edge: {source} -> {target}")
+
+        if psych_analysis['communication_style']['dominant'] != 'assertive':
+            for party in parties:
+                source = f"{party.lower()}_{doc_id}"
+                target = f"comm_style_{psych_analysis['communication_style']['dominant']}_{doc_id}_p{page}"
+                if not any(e['source'] == source and e['target'] == target for e in edges):
+                    edges.append({"source": source, "target": target, "relationship": "COMMUNICATES_VIA", "proof": proof})
+                    logger.debug(f"Added communication edge: {source} -> {target}")
+
+        # Strategic relationships from reasoning
+        for rel in strategic_reasoning['relationships']:
+            source = f"{rel['party1'].lower()}_{doc_id}"
+            target = f"{rel['party2'].lower()}_{doc_id}"
+            if not any(e['source'] == source and e['target'] == target for e in edges):
+                edges.append({"source": source, "target": target, "relationship": rel['type'], "proof": proof})
+                logger.debug(f"Added strategic edge: {source} -> {target}")
 
         # Fallback: basic document node
         if not parties and not contracts:

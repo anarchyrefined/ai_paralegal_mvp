@@ -22,3 +22,27 @@ repos:
         language: system
         files: edges_final\.csv$
         pass_filenames: false
+      - id: test-api
+        name: Run API Tests
+        entry: python -m pytest tests/test_api.py -v
+        language: system
+        files: ^(api/|tests/)
+        pass_filenames: false
+      - id: test-kg
+        name: Run KG Tests
+        entry: python -m pytest tests/test_kg_studio.py tests/test_advanced_extraction.py -v
+        language: system
+        files: ^(kg/|tests/)
+        pass_filenames: false
+      - id: test-auth
+        name: Run Auth Tests
+        entry: python -m pytest tests/test_auth.py -v
+        language: system
+        files: ^(api/service/auth\.py|tests/)
+        pass_filenames: false
+      - id: test-jobs
+        name: Run Job Tests
+        entry: python -m pytest tests/test_jobs.py -v
+        language: system
+        files: ^(api/service/jobs\.py|tests/)
+        pass_filenames: false

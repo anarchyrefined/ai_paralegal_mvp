@@ -12,9 +12,12 @@ import uuid
 import re
 import logging
 from langgraph.graph import StateGraph, END  # Actual LangGraph
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from .personas import app as personas_app
-# from graphrag_sdk import GraphRAG  # For KG queries - commented out for testing
+from .jobs import create_job, get_job_status
+from .auth import authenticate_user
+from kg.kg_queries import hybrid_search
+from fastapi import Header
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,11 +37,7 @@ class TaskRequest(BaseModel):
     task: str
     persona: str
 
-# Initialize GraphRAG for KG queries (placeholder)
-# grag = GraphRAG(
-#     llm="ollama/llama3.2",
-#     graph_store="falkordb"
-# )
+# Hybrid search instance available
 
 # Define LangGraph workflow
 def route_task(state):
@@ -54,9 +53,8 @@ def route_task(state):
 
 def query_kg(state):
     task = state["task"]
-    # Query KG using GraphRAG (placeholder)
-    # results = grag.query(task)  # Assume query method
-    results = "Mock KG results for task: " + task  # Placeholder
+    # Query KG using hybrid search
+    results = hybrid_search.hybrid_search(task)
     state["kg_results"] = results
     return state
 
@@ -82,19 +80,18 @@ workflow.add_conditional_edges("__start__", route_task, {
 workflow.add_edge("query_kg", "generate")
 workflow.add_edge("generate", END)
 
-# Deterministic checkpoint
-checkpointer = MemorySaver()
+# Persistent checkpoint with SQLite
+checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
 
 graph = workflow.compile(checkpointer=checkpointer)
 
 def run_langgraph_workflow(task: str, persona: str):
     logger.info(f"Starting LangGraph workflow for task: {task[:50]}... with persona: {persona}")
     # Run with deterministic seed (implicit via checkpointer)
-    config = {"configurable": {"thread_id": "test_thread"}}  # For testing
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}}  # Unique thread per run
     result = graph.invoke({"task": task, "persona": persona}, config=config)
-    job_id = str(uuid.uuid4())
-    logger.info(f"Workflow completed for job_id: {job_id}")
-    return {"job_id": job_id, "status": "completed", "result": result["response"]}
+    logger.info("Workflow completed")
+    return result["response"]
 
 def mask_pii(text: str):
     # Regex-based PII masking
@@ -104,7 +101,7 @@ def mask_pii(text: str):
     return text
 
 @app.post("/orchestrate/run")
-async def run_orchestration(task_request: TaskRequest, pii_mask: bool = Query(True)):
+async def run_orchestration(task_request: TaskRequest, pii_mask: bool = Query(True), authorization: str = Header(None)):
     logger.info(f"Received orchestration request for persona: {task_request.persona}")
     # Validate persona
     persona_names = [p["name"] for p in personas]
@@ -112,32 +109,47 @@ async def run_orchestration(task_request: TaskRequest, pii_mask: bool = Query(Tr
         logger.warning(f"Invalid persona requested: {task_request.persona}")
         raise HTTPException(status_code=400, detail="Invalid persona")
 
-    # RBAC check (mock: assume auditor role for tests; in real, from JWT)
-    user_role = "auditor"  # TODO: Extract from auth
+    # JWT auth check
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
+    token = authorization.split(" ")[1]
+    user_role = authenticate_user(token)  # From auth.py
+    if not user_role:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     role_perms = next((r["permissions"] for r in roles if r["role"] == user_role), [])
     if "write" not in role_perms:
         logger.warning(f"Insufficient permissions for role: {user_role}")
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    # Start LangGraph workflow
-    result = run_langgraph_workflow(task_request.task, task_request.persona)
+    # Create job asynchronously
+    job_id = create_job(task_request.task, task_request.persona)
 
-    # PII masking
-    if pii_mask and "pii_unmask" not in role_perms:
-        result["result"] = mask_pii(result["result"])
-        logger.info("PII masking applied to result")
+    status_url = f"/jobs/{job_id}"
+    logger.info(f"Orchestration job created, job_id: {job_id}")
 
-    status_url = f"/jobs/{result['job_id']}"
-    logger.info(f"Orchestration completed, job_id: {result['job_id']}")
-
-    return {"job_id": result["job_id"], "status_url": status_url}
+    return {"job_id": job_id, "status_url": status_url}
 
 @app.get("/jobs/{job_id}")
-async def get_job_status(job_id: str, pii_mask: bool = Query(True)):
+async def get_job_status(job_id: str, pii_mask: bool = Query(True), authorization: str = Header(None)):
     logger.info(f"Retrieving status for job_id: {job_id}")
-    # Mock: in real, retrieve from DB
-    result = "Completed analysis with proof tokens: doc:123|page:1|sha256=abc123..."
-    if pii_mask:
+    # JWT auth check
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
+    token = authorization.split(" ")[1]
+    user_role = authenticate_user(token)
+    if not user_role:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    role_perms = next((r["permissions"] for r in roles if r["role"] == user_role), [])
+
+    job = get_job_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    result = job["result"]
+    if pii_mask and "pii_unmask" not in role_perms:
         result = mask_pii(result)
         logger.info("PII masking applied to job result")
-    return {"job_id": job_id, "status": "completed", "result": result}
+
+    return {"job_id": job_id, "status": job["status"], "result": result}
