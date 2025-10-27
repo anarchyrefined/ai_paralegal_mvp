@@ -1,14 +1,30 @@
-import chromadb
-from typing import List, Dict, Any
-import pandas as pd
+import os
 import logging
+from typing import List, Dict, Any
+
+os.environ.setdefault("CHROMA_TELEMETRY", "false")
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
 
 logger = logging.getLogger(__name__)
 
+try:
+    import chromadb
+except Exception as exc:  # pragma: no cover - optional dependency
+    chromadb = None  # type: ignore
+    logger.warning(f"ChromaDB unavailable: {exc}. Vector search disabled.")
+
+import pandas as pd
+
 class HybridSearch:
     def __init__(self, graph_store="falkordb", vector_store_path="./chroma_db"):
-        self.chroma_client = chromadb.PersistentClient(path=vector_store_path)
-        self.vector_store = self.chroma_client.get_or_create_collection(name="legal_docs")
+        self.chroma_client = None
+        self.vector_store = None
+        if chromadb:
+            try:
+                self.chroma_client = chromadb.PersistentClient(path=vector_store_path)
+                self.vector_store = self.chroma_client.get_or_create_collection(name="legal_docs")
+            except Exception as exc:  # pragma: no cover - telemetry/offline issues
+                logger.warning(f"ChromaDB client disabled: {exc}")
 
         # Placeholder for GraphRAG SDK integration - will be implemented when SDK is available
         self.kg = None  # Placeholder

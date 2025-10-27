@@ -5,6 +5,13 @@ TRIBUNAL-GRADE API ENDPOINT
 - Every response must include proof tokens for evidence
 """
 
+import os
+
+os.environ.setdefault("POSTHOG_DISABLE", "true")
+os.environ.setdefault("POSTHOG_DISABLED", "true")
+os.environ.setdefault("CHROMA_TELEMETRY", "false")
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
+
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import json
